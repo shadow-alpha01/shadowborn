@@ -4,7 +4,7 @@
     <img src="assets/shadow-mist-rounded-icon.png" alt="Shadow Mist repository icon" width="280" height="280">
   </a>
 
-  <h1>Shadow Mist</h1>
+  <h1>ShadowMist</h1>
 
   <p><strong>Reversible network privacy for Linux.</strong></p>
   <p>Privacy you can verify. Connection you can keep. Changes you can undo.</p>
