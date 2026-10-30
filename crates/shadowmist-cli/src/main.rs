@@ -56,6 +56,12 @@ enum Commands {
         dry_run: bool,
         #[arg(long)]
         json: bool,
+        #[arg(
+            long = "replace-search-domain",
+            value_name = "DOMAIN",
+            help = "Explicitly replace this enrolled link's ordinary DNS search domain; local names may stop resolving (repeat for multiple domains)"
+        )]
+        replace_search_domains: Vec<String>,
     },
     Restore {
         #[arg(long)]
@@ -243,14 +249,29 @@ fn run(cli: Cli) -> Result<u8> {
             println!("Profile saved. Network settings remain until explicit apply/restore. Restart daemon to reload configuration.");
             Ok(0)
         }
-        Commands::Apply { dry_run, json } => {
+        Commands::Apply {
+            dry_run,
+            json,
+            replace_search_domains,
+        } => {
+            if replace_search_domains
+                .iter()
+                .any(|domain| !valid_search_domain(domain))
+            {
+                bail!("invalid input: replace-search-domain requires a literal search domain, without routing prefixes or wildcards")
+            }
             if dry_run {
                 let h = linux::discover(&config);
-                let p = plan(&config, &h);
+                let p = plan_replacing_search_domains(&config, &h, &replace_search_domains);
                 print_plan(&p, json, cli.verbose);
                 return Ok(if p.warnings.is_empty() { 0 } else { 2 });
             }
-            let (p, j) = linux::apply(&config, &cli.config, &cli.state_dir)?;
+            let (p, j) = linux::apply_replacing_search_domains(
+                &config,
+                &cli.config,
+                &cli.state_dir,
+                &replace_search_domains,
+            )?;
             print_plan(&p, json, cli.verbose);
             if !json {
                 println!(

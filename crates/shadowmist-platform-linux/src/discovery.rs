@@ -98,19 +98,21 @@ pub fn discover(config: &Config) -> Host {
     cap.nm_active =
         query("nmcli", &["-t", "-f", "RUNNING", "general"]).is_ok_and(|s| s == "running");
     cap.resolved_active = active("systemd-resolved.service");
+    if cap.resolved_active {
+        cap.resolved_dbus_available = match resolved_dbus_available() {
+            Ok(available) => available,
+            Err(_) => {
+                cap.errors.push(
+                    "cannot check resolved D-Bus ownership without activating the service".into(),
+                );
+                false
+            }
+        };
+    }
     cap.resolved_version = query("resolvectl", &["--version"])
         .ok()
         .and_then(|s| s.lines().next().map(str::to_string));
-    cap.resolver_owner = match fs::canonicalize("/etc/resolv.conf").ok().as_deref() {
-        Some(p) if p == Path::new("/run/systemd/resolve/stub-resolv.conf") => {
-            "systemd-resolved-stub"
-        }
-        Some(p) if p == Path::new("/run/systemd/resolve/resolv.conf") => {
-            "systemd-resolved-uplink-bypasses-stub"
-        }
-        _ => "other/unknown",
-    }
-    .into();
+    cap.resolver_owner = resolver_owner();
     cap.nm_dns_plugin = property(
         "org.freedesktop.NetworkManager",
         "/org/freedesktop/NetworkManager/DnsManager",
@@ -341,6 +343,7 @@ pub fn discover(config: &Config) -> Host {
     if cap.resolved_active {
         match query("resolvectl", &["dns"]) {
             Ok(out) => {
+                cap.resolved_upstream_configured = configured_dns_present(&out);
                 for line in out.lines() {
                     let Some((label, value)) = line.split_once(": ") else {
                         continue;
@@ -367,7 +370,7 @@ pub fn discover(config: &Config) -> Host {
                             .get("domain")
                             .is_some_and(|v| v.split_whitespace().any(|s| s != "~."))
                         {
-                            cap.dns_blockers.push("search/split DNS detected; preserve enterprise/LAN resolver policy".into());
+                            cap.dns_blockers.push(SEARCH_DNS_BLOCKER.into());
                         }
                         if !i.physical && live.get("dns").is_some_and(|v| !v.is_empty()) {
                             cap.dns_blockers

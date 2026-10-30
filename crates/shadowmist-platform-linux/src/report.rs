@@ -28,7 +28,25 @@ pub fn report(config: &Config, host: &Host, state_dir: &Path, probe: bool) -> Re
             "Review docs/compatibility.md; setup is a separate administrator action",
         );
     }
-    if host.capabilities.resolver_owner != "systemd-resolved-stub" {
+    if host.capabilities.resolved_active && !host.capabilities.resolved_dbus_available {
+        add("RESOLVED_DBUS_UNAVAILABLE", Severity::High,
+            "systemd-resolved is active but org.freedesktop.resolve1 has no reachable D-Bus owner; NetworkManager cannot publish DNS settings".into(),
+            "Inspect journalctl -u dbus -u systemd-resolved for registration/user errors; see docs/recovery.md before restarting DNS services");
+    }
+    if host.capabilities.resolved_upstream_configured == Some(false) {
+        add("RESOLVED_NO_UPSTREAM", Severity::Warn,
+            "Resolved reports no explicit global or per-link DNS servers; compiled fallback behavior is not verified".into(),
+            "Compare resolvectl dns with nmcli -g IP4.DNS,IP6.DNS device show; repair NM/resolved communication and inspect fallback status");
+    }
+    if host.capabilities.resolver_owner == "systemd-resolved-stub-bypassed" {
+        add("RESOLV_CONF_BYPASS", Severity::High,
+            "resolv.conf points to the resolved stub file but lists other nameservers; applications can bypass encrypted system DNS".into(),
+            "Keep the working fallback until resolver integration is repaired and verified; do not edit the generated stub as permanent configuration");
+    } else if host.capabilities.resolver_owner == "systemd-resolved-stub-invalid" {
+        add("RESOLV_CONF_INVALID", Severity::High,
+            "The resolved stub file is unreadable, malformed, or contains no nameserver".into(),
+            "Inspect resolver configuration from a console and preserve working access before changing it");
+    } else if host.capabilities.resolver_owner != "systemd-resolved-stub" {
         add(
             "RESOLVER_OWNERSHIP",
             Severity::Warn,
@@ -175,8 +193,14 @@ pub fn report(config: &Config, host: &Host, state_dir: &Path, probe: bool) -> Re
         .filter(|c| c.active && c.physical)
         .collect();
     let mut dns=DnsReport{state:Protection::Unprotected,scope:"systemd-resolved system queries only; no packet capture or application-wide enforcement".into(),reason:"Authenticated DoT is not established".into(),enforced:false};
+    if host.capabilities.resolved_active && !host.capabilities.resolved_dbus_available {
+        dns.reason="Resolved is running but its D-Bus API is unavailable; NetworkManager cannot deliver DNS configuration".into();
+    } else if host.capabilities.resolver_owner == "systemd-resolved-stub-bypassed" {
+        dns.reason="Additional nameservers in resolv.conf bypass the resolved stub; system DNS encryption cannot be claimed".into();
+    }
     if active.len() == 1
         && host.capabilities.resolved_active
+        && host.capabilities.resolved_dbus_available
         && host.capabilities.resolver_owner == "systemd-resolved-stub"
         && host.capabilities.nm_dns_plugin == "systemd-resolved"
         && host.capabilities.dns_blockers.is_empty()
@@ -239,6 +263,53 @@ pub fn route_change(previous: &Host, next: &Host) -> Option<Finding> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn active_service_without_bus_or_upstream_has_specific_findings() {
+        let h = Host {
+            capabilities: Capabilities {
+                resolved_active: true,
+                resolved_dbus_available: false,
+                resolved_upstream_configured: Some(false),
+                resolver_owner: "systemd-resolved-stub".into(),
+                ..Capabilities::default()
+            },
+            ..Host::default()
+        };
+        let r = report(
+            &Config::default(),
+            &h,
+            Path::new("/nonexistent/shadowmist"),
+            false,
+        );
+        assert!(r
+            .findings
+            .iter()
+            .any(|f| f.code == "RESOLVED_DBUS_UNAVAILABLE" && f.severity == Severity::High));
+        assert!(r.findings.iter().any(|f| f.code == "RESOLVED_NO_UPSTREAM"));
+        assert_eq!(r.dns.state, Protection::Unprotected);
+        assert!(r.dns.reason.contains("D-Bus"));
+    }
+    #[test]
+    fn mixed_stub_cannot_report_encrypted_dns() {
+        let h = Host {
+            capabilities: Capabilities {
+                resolved_active: true,
+                resolved_dbus_available: true,
+                resolver_owner: "systemd-resolved-stub-bypassed".into(),
+                ..Capabilities::default()
+            },
+            ..Host::default()
+        };
+        let r = report(
+            &Config::default(),
+            &h,
+            Path::new("/nonexistent/shadowmist"),
+            false,
+        );
+        assert!(r.findings.iter().any(|f| f.code == "RESOLV_CONF_BYPASS"));
+        assert_eq!(r.dns.state, Protection::Unprotected);
+        assert!(r.dns.reason.contains("bypass"));
+    }
     #[test]
     fn reports_redact_addresses() {
         let h = Host {

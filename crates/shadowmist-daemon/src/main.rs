@@ -41,6 +41,9 @@ fn log(level: &str, event: &str) {
         serde_json::json!({"level":level,"event":event,"timestamp":timestamp()})
     );
 }
+fn assessment_event(report: &Report) -> serde_json::Value {
+    serde_json::json!({"level":"info","event":"assessment_complete","timestamp":timestamp(),"state":report.state,"dns_state":report.dns.state,"findings":report.findings.iter().map(|f|f.code.as_str()).collect::<Vec<_>>()})
+}
 
 async fn events(tx: mpsc::Sender<()>) {
     let mut backoff = 1;
@@ -188,7 +191,9 @@ async fn main() -> Result<()> {
                     payload.as_bytes(),
                     0o644,
                 )?;
-                log("info", "assessment_complete");
+                if LOG_LEVEL.load(std::sync::atomic::Ordering::Relaxed) >= 2 {
+                    println!("{}", assessment_event(&r));
+                }
             }
             Err(_) => log("error", "assessment_failed_sensitive_details_suppressed"),
         }
@@ -202,4 +207,37 @@ async fn main() -> Result<()> {
         "stopped_persistent_settings_require_explicit_restore",
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn assessment_log_contains_state_and_codes_but_no_identifiers() {
+        let mut report = linux::report(
+            &Config::default(),
+            &Host::default(),
+            std::path::Path::new("/nonexistent/shadowmist"),
+            false,
+        );
+        report.interfaces.push(Interface {
+            effective_mac: Some("02:aa:bb:cc:dd:ee".into()),
+            addresses: vec!["192.0.2.17".into()],
+            ..Interface::default()
+        });
+        report.findings.push(Finding {
+            code: "TEST_FINDING".into(),
+            severity: Severity::Warn,
+            evidence: "private-network-name".into(),
+            mitigation: "review locally".into(),
+        });
+        let event = assessment_event(&report);
+        assert_eq!(event["state"], "UNPROTECTED");
+        assert_eq!(event["dns_state"], "UNPROTECTED");
+        let text = event.to_string();
+        assert!(text.contains("TEST_FINDING"));
+        for sensitive in ["02:aa:bb:cc:dd:ee", "192.0.2.17", "private-network-name"] {
+            assert!(!text.contains(sensitive));
+        }
+    }
 }

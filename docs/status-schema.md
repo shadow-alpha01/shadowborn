@@ -32,3 +32,13 @@ Configuration schema 1 rejects unknown fields, unknown profiles, malformed TOML,
 future versions and unsupported automatic rotation. Migration is explicit: retain
 a backup, update version/keys using documented release instructions, validate,
 review the plan, then apply. There is no implicit destructive schema migration.
+
+Additive capability fields include `resolved_dbus_available` (actual ownership
+of `org.freedesktop.resolve1`, checked without activation) and
+`resolved_upstream_configured` (explicit global/per-link server inventory, or
+null when unknown; not a health/fallback test). Resolver ownership distinguishes
+`systemd-resolved-stub`, `systemd-resolved-stub-bypassed` and
+`systemd-resolved-stub-invalid`. A stub symlink alone cannot establish protection.
+Older schema-1 reports missing these fields remain readable; missing D-Bus
+readiness defaults to false. Protected cached reports are discarded if the live
+stub or D-Bus ownership no longer qualifies.

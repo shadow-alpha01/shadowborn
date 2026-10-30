@@ -1,5 +1,51 @@
 use crate::*;
 
+pub const SEARCH_DNS_BLOCKER: &str =
+    "search/split DNS detected; preserve enterprise/LAN resolver policy";
+
+fn has_search_domains(host: &Host) -> bool {
+    host.dns_links.values().any(|link| {
+        link.get("domain")
+            .is_some_and(|domains| domains.split_whitespace().any(|domain| domain != "~."))
+    })
+}
+
+fn replacement_is_authorized(config: &Config, host: &Host, approved: &[String]) -> bool {
+    if approved.is_empty() || approved.iter().any(|domain| !valid_search_domain(domain)) {
+        return false;
+    }
+    let mut seen = false;
+    for (interface, link) in &host.dns_links {
+        for domain in link
+            .get("domain")
+            .into_iter()
+            .flat_map(|domains| domains.split_whitespace())
+            .filter(|domain| *domain != "~.")
+        {
+            seen = true;
+            let enrolled_physical = host.connections.iter().any(|connection| {
+                connection.interface == *interface
+                    && connection.active
+                    && connection.physical
+                    && !connection.enterprise
+                    && ["802-11-wireless", "802-3-ethernet"].contains(&connection.kind.as_str())
+                    && config.general.enrolled_profiles.contains(&connection.uuid)
+                    && !excluded(interface, &config.identity.exclude_interfaces)
+            });
+            // Route-only domains and other links remain unsupported, even with a matching suffix.
+            if !enrolled_physical
+                || domain.starts_with('~')
+                || !approved
+                    .iter()
+                    .any(|allowed| allowed.eq_ignore_ascii_case(domain))
+            {
+                return false;
+            }
+        }
+    }
+    seen
+}
+
 fn nm_change(plan: &mut Plan, c: &Connection, key: &str, value: &str, reason: &str) {
     match c.settings.get(key) {
         Some(before) if before != value => plan.changes.push(Change {
@@ -18,6 +64,14 @@ fn nm_change(plan: &mut Plan, c: &Connection, key: &str, value: &str, reason: &s
     }
 }
 pub fn plan(config: &Config, host: &Host) -> Plan {
+    plan_replacing_search_domains(config, host, &[])
+}
+
+pub fn plan_replacing_search_domains(
+    config: &Config,
+    host: &Host,
+    approved_domains: &[String],
+) -> Plan {
     let mut p = Plan::default();
     if config.general.profile == Profile::Observe {
         return p;
@@ -109,6 +163,18 @@ pub fn plan(config: &Config, host: &Host) -> Plan {
         return p;
     }
     let mut blockers = cap.dns_blockers.clone();
+    if replacement_is_authorized(config, host, approved_domains) {
+        // Remove only this known blocker after validating every affected link/domain.
+        blockers.retain(|blocker| blocker != SEARCH_DNS_BLOCKER);
+        p.warnings.push("Explicitly approved DNS search domains will be replaced; their local names may stop resolving. Prior values remain in the rollback journal.".into());
+    } else if has_search_domains(host)
+        && !blockers.iter().any(|blocker| blocker == SEARCH_DNS_BLOCKER)
+    {
+        blockers.push(SEARCH_DNS_BLOCKER.into());
+    }
+    if !cap.resolved_dbus_available {
+        blockers.push("resolved D-Bus interface unavailable: active service/Varlink alone cannot receive NetworkManager DNS settings".into());
+    }
     if !cap.nm_dot_supported {
         blockers.push(
             "NetworkManager offline validation did not confirm authenticated DoT/SNI support"
@@ -277,6 +343,170 @@ pub fn is_dns_change(c: &Change) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn home_fixture() -> (Config, Host) {
+        let (config, mut host) = fixture();
+        host.dns_links
+            .get_mut("wlan0")
+            .unwrap()
+            .insert("domain".into(), "home".into());
+        host.capabilities
+            .dns_blockers
+            .push(SEARCH_DNS_BLOCKER.into());
+        (config, host)
+    }
+    #[test]
+    fn search_domains_require_exact_explicit_consent() {
+        let (config, host) = home_fixture();
+        assert!(!plan(&config, &host).dns_live);
+        assert!(!plan_replacing_search_domains(&config, &host, &["other".into()]).dns_live);
+        for consent in ["home", "HOME"] {
+            let p = plan_replacing_search_domains(&config, &host, &[consent.into()]);
+            assert!(p.dns_live);
+            assert!(!p.reconnect);
+            let domain = p
+                .changes
+                .iter()
+                .find(|c| matches!(&c.target,Target::Resolved{key,..} if key=="domain"))
+                .unwrap();
+            assert_eq!(domain.before, "home");
+            assert_eq!(domain.after, "~.");
+        }
+    }
+    #[test]
+    fn every_search_domain_must_be_approved() {
+        let (config, mut host) = home_fixture();
+        host.dns_links
+            .get_mut("wlan0")
+            .unwrap()
+            .insert("domain".into(), "home lab.example".into());
+        assert!(!plan_replacing_search_domains(&config, &host, &["home".into()]).dns_live);
+        assert!(
+            plan_replacing_search_domains(&config, &host, &["home".into(), "lab.example".into()])
+                .dns_live
+        );
+    }
+    #[test]
+    fn routing_domains_and_vpns_remain_blocked() {
+        let (config, mut host) = home_fixture();
+        host.dns_links
+            .get_mut("wlan0")
+            .unwrap()
+            .insert("domain".into(), "~home".into());
+        for consent in ["home", "~home"] {
+            assert!(!plan_replacing_search_domains(&config, &host, &[consent.into()]).dns_live);
+        }
+        host.dns_links
+            .get_mut("wlan0")
+            .unwrap()
+            .insert("domain".into(), "home".into());
+        host.capabilities
+            .dns_blockers
+            .push("VPN/tunnel interface detected; automatic DNS takeover disabled".into());
+        assert!(!plan_replacing_search_domains(&config, &host, &["home".into()]).dns_live);
+    }
+    #[test]
+    fn consent_cannot_clear_domains_on_other_or_enterprise_links() {
+        let (config, host) = home_fixture();
+        for scenario in 0..4 {
+            let mut host = host.clone();
+            let mut config = config.clone();
+            match scenario {
+                0 => {
+                    host.dns_links
+                        .insert("docker0".into(), [("domain".into(), "home".into())].into());
+                }
+                1 => host.connections[0].enterprise = true,
+                2 => config.general.enrolled_profiles.clear(),
+                _ => host.connections[0].physical = false,
+            }
+            assert!(
+                !plan_replacing_search_domains(&config, &host, &["home".into()]).dns_live,
+                "scenario {scenario}"
+            );
+        }
+    }
+    #[test]
+    fn planner_detects_search_domains_without_discovery_hint() {
+        let (config, mut host) = home_fixture();
+        host.capabilities.dns_blockers.clear();
+        assert!(!plan(&config, &host).dns_live);
+        assert!(plan_replacing_search_domains(&config, &host, &["home".into()]).dns_live);
+    }
+    #[test]
+    fn unknown_search_blocker_is_not_cleared_without_snapshot_evidence() {
+        let (config, mut host) = home_fixture();
+        host.dns_links
+            .get_mut("wlan0")
+            .unwrap()
+            .insert("domain".into(), "".into());
+        assert!(!plan_replacing_search_domains(&config, &host, &["home".into()]).dns_live);
+    }
+    #[test]
+    fn invalid_consent_never_enables_dns() {
+        let (config, host) = home_fixture();
+        for domain in ["*", "*.home", "~.", "home corp", "--all"] {
+            assert!(!plan_replacing_search_domains(&config, &host, &[domain.into()]).dns_live);
+        }
+    }
+    #[test]
+    fn approved_search_domain_is_restored_with_the_transaction() {
+        use anyhow::Result;
+        use std::collections::BTreeMap;
+        struct Simulated(BTreeMap<Target, String>);
+        impl Adapter for Simulated {
+            fn read(&mut self, target: &Target) -> Result<String> {
+                Ok(self.0[target].clone())
+            }
+            fn write(&mut self, target: &Target, value: &str) -> Result<()> {
+                self.0.insert(target.clone(), value.into());
+                Ok(())
+            }
+            fn health(&mut self) -> Result<()> {
+                Ok(())
+            }
+        }
+        struct Memory(Vec<Journal>);
+        impl JournalStore for Memory {
+            fn save(&mut self, journal: &Journal) -> Result<()> {
+                self.0.push(journal.clone());
+                Ok(())
+            }
+        }
+        let (config, host) = home_fixture();
+        let p = plan_replacing_search_domains(&config, &host, &["home".into()]);
+        let original: BTreeMap<_, _> = p
+            .changes
+            .iter()
+            .map(|change| (change.target.clone(), change.before.clone()))
+            .collect();
+        let mut adapter = Simulated(original.clone());
+        let mut store = Memory(vec![]);
+        let mut journal = apply_transaction(&mut adapter, &mut store, &p, "1".into()).unwrap();
+        assert!(journal.changes.iter().any(
+            |change| matches!(&change.target,Target::Resolved{key,..} if key=="domain")
+                && change.before == "home"
+        ));
+        restore_transaction(&mut adapter, &mut store, &mut journal).unwrap();
+        assert_eq!(adapter.0, original);
+        assert_eq!(journal.state, TransactionState::RolledBack);
+    }
+    #[test]
+    fn active_resolved_without_dbus_cannot_receive_dns_policy() {
+        let (c, mut h) = fixture();
+        h.capabilities.resolved_dbus_available = false;
+        let p = plan(&c, &h);
+        assert!(!p.dns_live);
+        assert!(!p.changes.iter().any(is_dns_change));
+        assert!(p.warnings.iter().any(|w| w.contains("D-Bus")));
+    }
+    #[test]
+    fn manual_stub_bypass_blocks_dns_application() {
+        let (c, mut h) = fixture();
+        h.capabilities.resolver_owner = "systemd-resolved-stub-bypassed".into();
+        let p = plan(&c, &h);
+        assert!(!p.dns_live);
+        assert!(!p.changes.iter().any(is_dns_change));
+    }
     #[test]
     fn wifi_preserve_replaces_previous_random_policy() {
         let (mut c, mut h) = fixture();
@@ -401,6 +631,7 @@ mod tests {
                 nm_dot_supported: true,
                 writable: true,
                 resolved_active: true,
+                resolved_dbus_available: true,
                 resolver_owner: "systemd-resolved-stub".into(),
                 nm_dns_plugin: "systemd-resolved".into(),
                 ..Capabilities::default()

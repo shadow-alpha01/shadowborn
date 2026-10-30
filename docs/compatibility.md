@@ -8,7 +8,8 @@
 | Ethernet | Preserve MAC by default; random explicit opt-in | Pure planner; hardware NOT TESTED |
 | Wi-Fi random/stable-SSID | Future-activation profile policy; stable-SSID parser probe | NM offline parser; hardware rotation NOT TESTED |
 | IPv4-only / IPv6-only / dual stack | Plan DNS only for enabled families, preserve IPv6 configuration | Pure planner; live VM NOT TESTED |
-| VPN, enterprise/802.1X, split/search/global DNS | Exclude incompatible DNS/profile mutation | Simulated planners; live interoperability NOT TESTED |
+| VPN, enterprise/802.1X, split-routing/global DNS | Exclude incompatible DNS/profile mutation | Simulated planners; live interoperability NOT TESTED |
+| Ordinary search domains such as home | Preserve by default; exact per-apply consent can give up local names transactionally | Simulated consent/restore tests; live application NOT TESTED |
 | Virtual bridges, containers, tunnels | No identity changes; DNS coexistence exclusion as needed | Real discovery; no network mutation |
 | Read-only root / no systemd / container / WSL | Audit-only or rejected host installation | Capability logic; some paths simulated |
 | Fedora / Arch | Planned tier 2; observe/build only until verified | NOT TESTED |
@@ -29,7 +30,10 @@ properties are skipped with reasons. This avoids distro-name behavior switches.
 Enrolled profiles must correspond to currently discoverable physical devices.
 Unbound inactive profiles are excluded rather than guessed. Multiple active
 physical links exclude DNS takeover. LAN names/search domains are deliberately
-left alone by rejecting DNS application on links using them.
+left alone by default. Explicit `apply --replace-search-domain DOMAIN` consent
+can give up exact ordinary search domains on eligible links while preserving
+their prior values in the journal. Route-only domains and other compatibility
+restrictions remain unsupported. See `docs/recovery.md` for the scoped workflow.
 
 Wi-Fi scan randomization, LLMNR/mDNS/NetBIOS and DHCP/DUID changes are audit-only.
 No hostname changes, sysctl presets, generic firewall replacement or automatic

@@ -27,13 +27,23 @@ restart is allowed. The audited `nmcli` fallback uses NetworkManager's D-Bus API
 `nmcli monitor` supplies its event stream. No custom D-Bus protocol is necessary
 for the MVP. A direct adapter can replace this without changing the planner.
 
-DNS is eligible only when resolved owns the stub resolv.conf, the NM DNS plugin
+DNS is eligible only when resolved owns the stub resolv.conf, that file lists
+only its local stub nameserver, resolved owns its D-Bus name, the NM DNS plugin
 is resolved, and one ordinary enrolled physical link is active without VPN,
 split/search DNS, competing link/global resolvers, or captive-portal indication.
 Unsupported/uncertain ownership blocks DNS changes but allows useful auditing.
+Ordinary search domains are preserved by default. An explicit per-apply
+`--replace-search-domain DOMAIN` consent may replace only exact ordinary domains
+on eligible enrolled active physical links. All affected domains must match;
+route-only domains, VPNs, enterprise/other links and unrelated blockers stay
+unsupported. This drops selected local-name support, not split-DNS routing.
+Original domain values remain in the same DNS transaction and restore journal.
 Persistent NM per-profile settings and matching resolved live per-link settings
 are separately snapshotted. No global DNS restart or resolv.conf replacement.
-DoT requires `yes`, pinned certificate hostname, uncached successful lookups,
+Service activity and Varlink accessibility are checked separately from the
+non-activating D-Bus ownership probe. Missing configured upstream DNS is reported
+without claiming that compiled fallback behavior was tested. DoT requires
+`yes`, pinned certificate hostname, uncached successful lookups,
 and exact effective configuration; status distinguishes configuration from
 verification and never infers encryption from DNSSEC. Verification is scoped
 to resolved, not all application traffic. Optional health lookups are explicit.

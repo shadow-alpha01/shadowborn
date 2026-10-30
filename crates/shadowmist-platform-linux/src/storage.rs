@@ -30,6 +30,12 @@ pub fn published_status(max_age: u64) -> Option<Report> {
     {
         return None;
     }
+    if matches!(r.dns.state, Protection::Configured | Protection::Verified)
+        && (crate::resolver_owner() != "systemd-resolved-stub"
+            || !crate::resolved_dbus_available().ok()?)
+    {
+        return None;
+    }
     Some(r)
 }
 pub struct StateLock {

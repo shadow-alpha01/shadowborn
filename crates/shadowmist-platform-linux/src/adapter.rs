@@ -190,6 +190,12 @@ impl Adapter for LinuxAdapter {
     }
 }
 pub fn verify_dns(config: &Config, interface: &str, probe: bool) -> Result<bool> {
+    if resolver_owner() != "systemd-resolved-stub" {
+        bail!("resolv.conf does not exclusively use the resolved stub; refusing encrypted system-DNS verification")
+    }
+    if !resolved_dbus_available()? {
+        bail!("resolved D-Bus interface unavailable; NetworkManager DNS integration is not ready")
+    }
     let live = live_dns(interface)?;
     validate_effective_dns(config, &live)?;
     if !probe {

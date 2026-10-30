@@ -386,8 +386,8 @@ An opportunistic transport setting is not accepted as evidence of protection.
 DNS changes require all of the following:
 
 1. The installed NM parser accepts required DoT settings and certificate-hostname endpoints.
-2. systemd-resolved is active and NetworkManager uses its resolved DNS plugin.
-3. `/etc/resolv.conf` points to resolved's **stub** configuration.
+2. systemd-resolved is active, owns its D-Bus name, and NetworkManager uses its resolved DNS plugin.
+3. `/etc/resolv.conf` points to resolved's **stub** configuration and lists only its stub nameserver.
 4. Exactly one ordinary physical connection is active, enrolled, and eligible.
 5. VPN, split/search DNS, competing global/virtual-link DNS, or portal/limited-connectivity indicators do not make takeover incompatible.
 6. Approved health domains and a local default route are available.
@@ -395,6 +395,26 @@ DNS changes require all of the following:
 Unsupported combinations produce explicit skip reasons. Resolver migration,
 `resolv.conf` replacement, and a global NetworkManager restart are outside the
 application workflow. See [compatibility](docs/compatibility.md).
+
+If resolved is active but has no upstream servers, compare `resolvectl dns` with
+NetworkManager's DNS inventory and inspect D-Bus registration. Adding a public
+nameserver to the generated stub bypasses resolved and does not enable DoT.
+The [DNS recovery procedure](docs/recovery.md#active-resolved-service-missing-dns-or-a-manual-nameserver-workaround)
+documents this installation-time failure, backup, manual repair, and verification.
+
+If you explicitly give up local names under an ordinary search domain such as
+`home`, preview and apply that choice in the same DNS transaction:
+
+```bash
+sudo /usr/local/bin/shadowmist apply --replace-search-domain home --dry-run --verbose
+sudo /usr/local/bin/shadowmist apply --replace-search-domain home
+```
+
+This requires exact consent for every affected ordinary search domain on an
+eligible enrolled active physical link; previous values remain recoverable.
+VPNs, routing domains and unrelated DNS conflicts remain blocked. The flag
+does not save an automatic override for the daemon. See the
+[search-domain recovery workflow](docs/recovery.md#explicitly-give-up-an-ordinary-local-dns-search-domain).
 
 ### Resolver presets
 
@@ -611,8 +631,8 @@ Recorded local validation on Kali 2026.3 / x86_64, Rust 1.97.1, and NM 1.58.1:
 
 | Check | Recorded result |
 | --- | --- |
-| Rust unit tests | **34 passed** — 21 core and 13 Linux adapter/storage/report tests. |
-| Integration smoke suite | **11 passed** — real passive commands, daemon IPC/lifecycle, and staged installation/update/removal. |
+| Rust unit tests | **54 passed** — 32 core, 21 Linux adapter/storage/report, and 1 daemon logging test. |
+| Integration smoke suite | **12 passed** — real passive commands, exact search-domain consent checks, daemon IPC/lifecycle, and staged installation/update/removal. |
 | Format and Clippy | **Passed**, with Clippy warnings treated as errors. |
 | Release build | **Passed**, both binaries produced. |
 | Shell syntax and systemd unit verification | **Passed**; unit executable paths pointed at the local build during verification. |

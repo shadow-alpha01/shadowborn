@@ -114,9 +114,23 @@ fn degraded(state: &Path) -> Result<()> {
     atomic_write(&state.join("health.json"),b"{\"state\":\"DEGRADED\",\"reason\":\"Rollback occurred; previous/plaintext DNS may be active. Inspect journal and run apply explicitly to retry.\"}",0o600)
 }
 pub fn apply(config: &Config, config_path: &Path, state: &Path) -> Result<(Plan, Option<Journal>)> {
+    apply_replacing_search_domains(config, config_path, state, &[])
+}
+pub fn apply_replacing_search_domains(
+    config: &Config,
+    config_path: &Path,
+    state: &Path,
+    approved_domains: &[String],
+) -> Result<(Plan, Option<Journal>)> {
     require_root()?;
     secure_config(config_path)?;
     config.validate()?;
+    if approved_domains
+        .iter()
+        .any(|domain| !valid_search_domain(domain))
+    {
+        bail!("invalid input: replace-search-domain requires a literal search domain, without routing prefixes or wildcards")
+    }
     let _lock = lock_state(state)?;
     let mut store = DiskStore::new(state)?;
     if store.journals()?.iter().any(|j| {
@@ -128,7 +142,7 @@ pub fn apply(config: &Config, config_path: &Path, state: &Path) -> Result<(Plan,
         bail!("unfinished transaction/conflict; run recover or restore before apply")
     }
     let host = discover(config);
-    let p = plan(config, &host);
+    let p = plan_replacing_search_domains(config, &host, approved_domains);
     if p.changes.is_empty() {
         return Ok((p, None));
     }

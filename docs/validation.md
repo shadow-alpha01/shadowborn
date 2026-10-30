@@ -1,8 +1,11 @@
 # Validation record
 
 Environment: Kali GNU/Linux 2026.3, x86_64, systemd PID 1, Rust/Cargo 1.97.1,
-NetworkManager 1.58.1. Running as an ordinary user. Resolved inactive/unavailable;
-NM DNS plugin `default`. No developer-host network mutation is permitted.
+NetworkManager 1.58.1. Running as an ordinary user. The initial foundation run
+had resolved inactive/unavailable and NM DNS plugin `default`. A later read-only
+incident investigation found resolved 262 active, the NM resolved plugin selected,
+and resolver D-Bus registration broken after package installation. No host network
+mutation is performed by these checks.
 
 ## Automated results
 
@@ -12,9 +15,9 @@ Their bin directory is used on PATH for validation.
 
 - [x] `cargo fmt --all -- --check` — PASS
 - [x] `cargo clippy --locked --workspace --all-targets -- -D warnings` — PASS, zero warnings
-- [x] `cargo test --locked --workspace` — PASS, 34 unit tests (21 core, 13 Linux)
+- [x] `cargo test --locked --workspace` — PASS, 54 unit tests (32 core, 21 Linux, 1 daemon)
 - [x] `cargo build --locked --release --workspace` — PASS, both binaries
-- [x] `python3 tests/integration/smoke.py` — PASS, 11 integration checks
+- [x] `python3 tests/integration/smoke.py` — PASS, 12 integration checks
 - [x] Shell syntax and systemd unit validation using built executable paths — PASS.
 
 The simulated adapter tests exercise transaction failure, health failure,
@@ -56,3 +59,36 @@ before/after dry runs and offline parser probes, tested a real unprivileged
 daemon/socket/SIGTERM lifecycle, and staged install/update/uninstall with
 ownership-conflict injection. Host networking, services and firewall were not
 modified. No failed automated checks remain in the final validation run.
+
+## DNS incident regression validation
+
+The user restored connectivity by adding a public nameserver to the generated
+resolved stub. Read-only inspection found a running resolved process with no
+owner for `org.freedesktop.resolve1`, empty resolved upstream state despite NM
+knowing DHCP DNS, and an installation-time D-Bus log reporting unknown user
+`systemd-resolve`, followed by activation timeouts. The new doctor identifies
+`RESOLVED_DBUS_UNAVAILABLE`, `RESOLVED_NO_UPSTREAM` and `RESOLV_CONF_BYPASS`
+on this real host without upstream DNS probes or service activation.
+
+Regression tests cover stub-content validation (including IPv6 and order),
+missing bus ownership, planner refusal, precise findings, and sanitized daemon
+assessment logs containing state/finding codes. Host repair commands are documented
+in `recovery.md`; they were not executed. Installed binaries and system services
+were left untouched; updated binaries are available under `target/release`.
+
+## Explicit ordinary search-domain replacement
+
+`apply --replace-search-domain home` is a one-time exact consent for dropping
+the local suffix on an active enrolled eligible physical connection. New tests
+cover default preservation, exact/case-insensitive consent, complete domain
+coverage, routing/VPN/other/enterprise exclusions, missing snapshot evidence,
+literal input validation, and restoring the prior `home` value with the entire
+transaction. No new blanket policy is saved in configuration.
+
+Read-only planning against the actual configured host was compared with and
+without consent. The default plan skipped DNS; the consented plan proposed live
+DNS changes including recorded `home` -> `~.` with no reconnect. The host's
+resolver contents, link, per-link DNS/domain/transport and NM profile inventory
+were preserved during verification. Live replacement was not executed: root
+authorization still requires the user's sudo password. The prepared installed
+CLI workflow must be run by the user; no VERIFIED live-DNS claim is made.

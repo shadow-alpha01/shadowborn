@@ -23,6 +23,7 @@ shadow-mist/
   crates/shadowmist-platform-linux/src/adapter.rs
   crates/shadowmist-platform-linux/src/command.rs
   crates/shadowmist-platform-linux/src/discovery.rs
+  crates/shadowmist-platform-linux/src/dns_diagnostics.rs
   crates/shadowmist-platform-linux/src/lib.rs
   crates/shadowmist-platform-linux/src/operations.rs
   crates/shadowmist-platform-linux/src/report.rs

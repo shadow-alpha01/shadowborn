@@ -75,6 +75,13 @@ def main():
             assert sorted(after.stdout.splitlines()) == before_profiles
         check("apply/restore dry run and offline capability probes change no profiles, resolver or state")
 
+        for domain in ("*.home", "~home", "home corp", "home;id"):
+            run(cmd + ["apply", "--dry-run", "--replace-search-domain", domain], codes=(3,))
+        consent_plan = json.loads(run(cmd + ["apply", "--dry-run", "--replace-search-domain", "home", "--json"], codes=(0, 2)).stdout)
+        assert not consent_plan["changes"]  # No enrolled profiles in this fixture.
+        assert not (base / "absent-state").exists()
+        check("literal search-domain consent is validated and cannot bypass enrollment or dry-run safety")
+
         for subcommand in ("doctor", "audit", "status"):
             report = json.loads(run(cmd + [subcommand, "--json"], codes=(0, 2)).stdout)
             assert report["schema_version"] == 1 and report["redacted"]
@@ -95,6 +102,7 @@ def main():
         config.write_text("schema_version=1\n[general]\nprofile='observe'\n")
         if os.geteuid() != 0:
             run(cmd + ["apply"], codes=(5,))
+            run(cmd + ["apply", "--replace-search-domain", "home"], codes=(5,))
             assert not (base / "absent-state").exists()
             check("unprivileged mutation denied before any state write")
 
@@ -138,6 +146,9 @@ def main():
                 assert daemon.returncode == 0, errors[:300]
             assert not (runtime / "status.sock").exists()
             assert '"event":"stopped_persistent_settings_require_explicit_restore"' in output
+            assessment = next(json.loads(line) for line in output.splitlines() if '"event":"assessment_complete"' in line)
+            assert assessment["state"] == "OBSERVE" and "dns_state" in assessment
+            assert isinstance(assessment["findings"], list)
             check("daemon SIGTERM cleans socket without reconnect or restore")
 
         # All installer effects remain inside this temporary prefix.

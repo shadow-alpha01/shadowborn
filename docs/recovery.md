@@ -1,5 +1,109 @@
 # Recovery and uninstall
 
+## Active resolved service, missing DNS, or a manual nameserver workaround
+
+A running `systemd-resolved` process is insufficient for NetworkManager
+integration. Recent `resolvectl` versions can read state over Varlink while the
+resolver's D-Bus API is unavailable. In that condition NM may know the DHCP DNS
+servers but fail to deliver them to resolved. The stub then has no configured
+upstream. An extra `nameserver 1.1.1.1` in the generated stub can restore access
+by bypassing resolved, without enabling authenticated system DNS.
+
+Inspect local state without issuing external DNS probes or changing networking:
+
+```bash
+shadowmist doctor
+resolvectl status
+resolvectl dns
+nmcli -g IP4.DNS,IP6.DNS device show
+busctl --system --timeout=2 call \
+  org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus \
+  NameHasOwner s org.freedesktop.resolve1
+journalctl -b -u dbus -u systemd-resolved --no-pager
+getent passwd systemd-resolve
+```
+
+`b false` means that no process owns the resolver's bus name. An `activatable`
+entry in `busctl list` is not an active owner. Installation-time logs such as
+`Unknown username "systemd-resolve"` followed by resolve1 activation timeouts
+indicate a bus registration/policy problem to investigate. Shadow Mist reports
+`RESOLVED_DBUS_UNAVAILABLE`, `RESOLVED_NO_UPSTREAM`, and `RESOLV_CONF_BYPASS`
+separately instead of treating a successful service start as readiness.
+
+For a freshly installed resolver with that registration failure, an administrator
+can reload D-Bus policy, restart resolved, and refresh only NM's DNS plugin.
+**These are manual repair operations, not tests. They can briefly interrupt name
+resolution and restarting resolved can regenerate its stub, removing a manual
+nameserver entry. Keep a local console and save the working file first.**
+
+```bash
+SHADOWMIST_DNS_BACKUP="/root/shadowmist-resolv.conf.$(date -u +%Y%m%dT%H%M%SZ).bak"
+sudo cp --dereference --preserve=mode,timestamps /etc/resolv.conf "$SHADOWMIST_DNS_BACKUP"
+
+sudo systemctl reload dbus.service
+sudo systemctl restart systemd-resolved.service
+sudo nmcli general reload dns-full
+
+resolvectl dns
+busctl --system --timeout=2 call \
+  org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus \
+  NameHasOwner s org.freedesktop.resolve1
+```
+
+Verify that the bus owner is now `b true` and that the active link has the
+expected upstream DNS servers. If the repair fails, restore the saved working
+contents from the console, keeping the existing symlink:
+
+```bash
+sudo cp "$SHADOWMIST_DNS_BACKUP" /etc/resolv.conf
+```
+
+This restores the temporary plaintext workaround; it is not DoT protection.
+Do not restart the whole NetworkManager service or replace resolver ownership
+merely to refresh DNS. The upstream [nmcli reference](https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nmcli.html)
+documents `general reload dns-full` and its short DNS interruption.
+
+Once basic resolver integration works, enroll profile UUIDs, approve health
+domains, review `apply --dry-run`, and apply explicitly. Starting Shadow Mist
+alone does not configure these consent-dependent settings. A mixed stub is
+rejected for encrypted system-DNS verification even if resolved itself uses TLS.
+
+## Explicitly give up an ordinary local DNS search domain
+
+An ordinary search suffix such as `home` can block DNS application because
+replacing its router DNS may stop local names from resolving. If you deliberately
+give up that suffix, use an exact, one-time consent flag on `apply`:
+
+```bash
+sudo /usr/local/bin/shadowmist apply --replace-search-domain home --dry-run --verbose
+sudo /usr/local/bin/shadowmist apply --replace-search-domain home
+sudo systemctl enable --now shadowmist-recover shadowmist
+/usr/local/bin/shadowmist dns status --probe --json
+```
+
+Use a current installed binary; `apply --help` lists the flag. The dry-run plan
+must contain live DNS changes, with no unresolved `DNS skipped` condition.
+Consent is exact and case-insensitive, without wildcards; repeat the flag for
+each ordinary search domain that must be replaced. Every affected domain must
+belong to an active, enrolled, eligible physical connection. Route-only domains
+(such as `~corp.example`), VPN/tunnel links, enterprise profiles, other links,
+global DNS conflicts and all other compatibility checks remain blocked.
+
+The explicit application replaces the resolved domain list with `~.` and writes
+the matching persistent NM policy, including ignore-auto-dns for enabled IP
+families. Old DNS servers, transport, domains and profile values are snapshotted
+in the same transaction before mutation. Failed health checks or explicit
+`restore` can therefore return `home` and the prior resolver values together.
+No extra reconnect or global network-manager restart is requested.
+
+The flag does not save a blanket override in TOML or authorize the daemon to
+discard later search/split-DNS changes. Future connection activations use the
+committed profile settings; restore retains the original baseline. This is
+explicit removal of local-name support, not split-DNS interoperability or strict
+firewall enforcement. Live application remains subject to the VM release gates.
+
+## Restore recorded Shadow Mist changes
+
 Keep a local console available when testing DNS or explicit reconnect. The CLI
 does not need a running monitor to restore recorded values.
 

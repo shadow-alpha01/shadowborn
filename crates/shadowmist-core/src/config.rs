@@ -201,8 +201,10 @@ impl Default for Logging {
 }
 
 pub fn valid_domain(s: &str) -> bool {
+    s.contains('.') && valid_search_domain(s)
+}
+pub fn valid_search_domain(s: &str) -> bool {
     s.len() <= 253
-        && s.contains('.')
         && !s.ends_with('.')
         && s.split('.').all(|label| {
             !label.is_empty()
@@ -304,6 +306,26 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn search_domain_consent_accepts_literal_names_only() {
+        assert!(valid_search_domain("home"));
+        assert!(valid_search_domain("lab.example"));
+        assert!(!valid_domain("home"));
+        for domain in [
+            "",
+            "*",
+            "*.home",
+            "~home",
+            "~.",
+            "home.",
+            "--all",
+            "home corp",
+            "home;id",
+            "../home",
+        ] {
+            assert!(!valid_search_domain(domain), "{domain}");
+        }
+    }
     #[test]
     fn config_validation() {
         Config::parse("").unwrap();

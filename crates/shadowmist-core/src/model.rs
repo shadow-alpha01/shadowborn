@@ -12,6 +12,10 @@ pub struct Capabilities {
     pub nm_dot_supported: bool,
     pub nm_stable_ssid_supported: bool,
     pub resolved_active: bool,
+    #[serde(default)]
+    pub resolved_dbus_available: bool,
+    #[serde(default)]
+    pub resolved_upstream_configured: Option<bool>,
     pub resolved_version: Option<String>,
     pub resolver_owner: String,
     pub nm_dns_plugin: String,
