@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/shadow-mist-rounded-icon.png" width="240" alt="Shadowborn — original Shadow Mist repository artwork">
+  <img src="assets/shadow-mist-rounded-icon.png" width="300" alt="Shadowborn — original Shadow Mist repository artwork">
   <h1>ShadowBorn</h1>
   <p><strong>Your gateway. Your device keys. Standard WireGuard clients.</strong></p>
   <p>Rust control plane · Kernel WireGuard · nftables · VPN-scoped DNS over TLS</p>
