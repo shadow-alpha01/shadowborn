@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="assets/shadow-mist-rounded-icon.png" width="180" alt="Shadowborn — original Shadow Mist repository artwork">
-  <h1>Shadowborn</h1>
+  <img src="assets/shadow-mist-rounded-icon.png" width="240" alt="Shadowborn — original Shadow Mist repository artwork">
+  <h1>ShadowBorn</h1>
   <p><strong>Your gateway. Your device keys. Standard WireGuard clients.</strong></p>
   <p>Rust control plane · Kernel WireGuard · nftables · VPN-scoped DNS over TLS</p>
   <p><a href="docs/installation-server.md">Server setup</a> · <a href="docs/client-enrollment.md">Enroll a device</a> · <a href="docs/no-logs-policy.md">No activity logs</a> · <a href="docs/validation.md">Validation</a></p>
