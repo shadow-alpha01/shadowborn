@@ -1,0 +1,22 @@
+[Unit]
+Description=Recover incomplete Shadow Mist transactions when NetworkManager is available
+After=local-fs.target dbus.service NetworkManager.service
+Wants=dbus.service NetworkManager.service
+Before=shadowmist.service network-online.target
+ConditionPathIsDirectory=/var/lib/shadowmist/transactions
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/shadowmist recover
+RemainAfterExit=yes
+TimeoutStartSec=120s
+UMask=0077
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/shadowmist
+# Recovery needs NM's profile API. Network activation can already have begun;
+# reboot recovery timing is a required VM release gate. Failures stay visible.
+
+[Install]
+WantedBy=multi-user.target

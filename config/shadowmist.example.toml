@@ -1,0 +1,44 @@
+# Schema 1. Installation and daemon start do not enroll profiles or apply policy.
+schema_version = 1
+
+[general]
+profile = "balanced"
+check_on_connect = true
+network_scan = "passive"
+reconcile_seconds = 120
+# Explicitly enroll UUIDs obtained with: nmcli -g UUID,TYPE connection show
+enrolled_profiles = []
+
+[identity]
+wifi_mac = "random"              # random | stable-ssid | preserve
+wifi_scan_randomization = true   # audited only; no global NM reload
+ethernet_mac = "preserve"        # random is an explicit Ethernet opt-in
+rotate_on_daemon_start = false   # true is reserved and rejected
+rotate_active_connections = false
+exclude_interfaces = ["lo", "docker*", "veth*", "br-*", "tun*", "wg*"]
+
+[dns]
+enabled = true
+provider = "quad9"               # quad9 | cloudflare | custom
+transport = "dot"
+verify_effective_state = true
+balanced_restore_on_failure = true
+custom_servers = []              # e.g. ["192.0.2.53#resolver.example.org"]
+# Opt in by listing 2..4 independent domains you authorize for DNS health queries.
+# Example: health_domains = ["example.com", "example.net"]
+# No HTTP requests, telemetry uploads or third-party scans are performed.
+health_domains = []
+health_timeout_seconds = 8
+
+[ipv6]
+enabled = true
+privacy_addresses = "prefer-temporary" # or preserve; no IPv6 disablement
+
+[network_audit]
+include_listening_ports = true
+check_gateway_changes = true
+check_wifi_security = true
+
+[logging]
+level = "info"
+redact_sensitive_values = true

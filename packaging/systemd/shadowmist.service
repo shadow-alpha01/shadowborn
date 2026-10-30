@@ -1,0 +1,38 @@
+[Unit]
+Description=Shadow Mist network privacy monitor
+Documentation=file:/usr/local/share/doc/shadowmist/README.md
+Wants=NetworkManager.service shadowmist-recover.service
+After=NetworkManager.service shadowmist-recover.service
+ConditionPathExists=/etc/shadowmist/config.toml
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/shadowmistd
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+User=root
+Group=root
+UMask=0077
+RuntimeDirectory=shadowmist
+RuntimeDirectoryMode=0755
+StateDirectory=shadowmist
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/shadowmist /run/shadowmist
+# The monitor's NM/resolved writes use their root-authorized D-Bus APIs.
+# It never opens raw sockets, scans peers or reconnects on startup.
+
+[Install]
+WantedBy=multi-user.target
