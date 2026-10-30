@@ -201,9 +201,9 @@ the commented [example configuration](config/shadowmist.example.toml).
 | `strict` | Reserved for phase 2. The current CLI and validator reject it. |
 
 ```bash
-sudo shadowmist profile set observe
-sudo shadowmist profile set balanced
-sudo systemctl restart shadowmist
+shadowmist profile set observe
+shadowmist profile set balanced
+systemctl restart shadowmist
 ```
 
 Changing the selected profile saves configuration. Use `apply` or `restore`
