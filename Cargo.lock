@@ -336,6 +336,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "shadowborn-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "libc",
+ "serde",
+ "serde_json",
+ "shadowborn-core",
+ "shadowborn-platform",
+]
+
+[[package]]
+name = "shadowborn-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "shadowborn-platform"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fs2",
+ "libc",
+ "serde_json",
+ "shadowborn-core",
+ "tempfile",
+]
+
+[[package]]
 name = "shadowmist-cli"
 version = "0.1.0"
 dependencies = [

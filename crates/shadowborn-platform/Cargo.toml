@@ -1,0 +1,15 @@
+[package]
+name = "shadowborn-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+serde_json.workspace = true
+libc.workspace = true
+fs2.workspace = true
+tempfile.workspace = true
+shadowborn-core = { path = "../shadowborn-core" }

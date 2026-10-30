@@ -1,0 +1,31 @@
+# Documentation addresses: replace endpoint, admin CIDR and WAN before VM use.
+schema_version = 1
+[server]
+interface = "wg-shadowborn"
+listen_port = 51820
+endpoint = "203.0.113.10"
+tunnel_ipv4 = "10.89.0.1/24"
+wan_interface = "ens3"
+admin_ipv4 = "198.51.100.8/32"
+ssh_port = 22
+profile = "baseline" # baseline | hardened (both enforce the same v1 safety floor)
+ipv6 = "blocked" # no IPv6 Internet egress in this implementation
+[security]
+peer_isolation = true
+restrict_peer_lan_access = true
+psk_per_peer = true
+public_management_api = false
+firewall_default_deny = true
+[dns]
+mode = "vpn-resolver"
+bind_to_vpn_only = true
+upstream = "quad9-dot"
+query_logging = false # fixed false; true is rejected
+[privacy]
+no_activity_logs = true
+telemetry = false
+store_peer_activity = false
+[operations]
+auto_apply_on_install = false
+require_confirm = true
+transactional_rollback = true

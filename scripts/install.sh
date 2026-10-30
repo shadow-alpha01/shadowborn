@@ -60,9 +60,9 @@ if [ "$(id -u)" = 0 ]; then
         echo 'Build as an unprivileged user: ./scripts/install.sh --build-only; then sudo ./scripts/install.sh' >&2
         exit 4
     fi
-    runuser -u "$SUDO_USER" -- cargo build --locked --release --workspace
+    runuser -u "$SUDO_USER" -- cargo build --locked --release -p shadowmist-cli -p shadowmist-daemon
 else
-    cargo build --locked --release --workspace
+    cargo build --locked --release -p shadowmist-cli -p shadowmist-daemon
 fi
 if [ "$BUILD_ONLY" = 1 ]; then exit 0; fi
 if [ -z "$DESTDIR" ]; then
@@ -73,10 +73,31 @@ if [ -z "$DESTDIR" ]; then
     if systemctl is-active --quiet shadowmist.service; then echo 'Stop shadowmist before updating its binaries; stopping does not restore settings.' >&2; exit 5; fi
 fi
 MANIFEST="$DESTDIR/var/lib/shadowmist/install-manifest.tsv"
+owned_documents() {
+    printf '%s\n' docs/licensing.md
+    for DOC in docs/legacy/*.md; do printf '%s\n' "$DOC"; done
+}
 owned_files() {
     printf '%s\n' usr/local/bin/shadowmist usr/local/sbin/shadowmistd etc/systemd/system/shadowmist.service etc/systemd/system/shadowmist-recover.service usr/local/share/doc/shadowmist/README.md usr/local/share/doc/shadowmist/LICENSE usr/local/share/doc/shadowmist/assets/shadow-mist-rounded-icon.png usr/local/libexec/shadowmist/uninstall.sh
-    for DOC in docs/*.md docs/project-tree.txt; do printf 'usr/local/share/doc/shadowmist/%s\n' "$DOC"; done
+    for DOC in $(owned_documents); do printf 'usr/local/share/doc/shadowmist/%s\n' "$DOC"; done
 }
+if [ "$UPDATE" = 1 ] && [ -f "$MANIFEST" ]; then
+    TAB=$(printf '\t')
+    while IFS="$TAB" read -r EXPECTED RELATIVE; do
+        case "$RELATIVE" in
+            usr/local/bin/shadowmist|usr/local/sbin/shadowmistd|etc/systemd/system/shadowmist.service|etc/systemd/system/shadowmist-recover.service|usr/local/libexec/shadowmist/uninstall.sh|usr/local/share/doc/shadowmist/README.md|usr/local/share/doc/shadowmist/LICENSE|usr/local/share/doc/shadowmist/assets/shadow-mist-rounded-icon.png|usr/local/share/doc/shadowmist/docs/*.md|usr/local/share/doc/shadowmist/docs/project-tree.txt) ;;
+            *) echo 'Invalid prior installation manifest' >&2; exit 5;;
+        esac
+        case "$RELATIVE" in *..*|*[!a-zA-Z0-9/_.-]*) echo 'Invalid prior installation path' >&2; exit 5;; esac
+        TARGET="$DESTDIR/$RELATIVE"
+        [ ! -L "$TARGET" ] || { echo 'Prior installation symlink conflict' >&2; exit 5; }
+        if [ -e "$TARGET" ]; then
+            [ -f "$TARGET" ] || { echo 'Prior installation file type conflict' >&2; exit 5; }
+            ACTUAL=$(sha256sum "$TARGET" | cut -d ' ' -f 1)
+            [ "$ACTUAL" = "$EXPECTED" ] || { echo 'Modified prior installation file retained' >&2; exit 5; }
+        fi
+    done < "$MANIFEST"
+fi
 for RELATIVE in $(owned_files); do
     TARGET="$DESTDIR/$RELATIVE"
     [ ! -L "$TARGET" ] || { echo "Refusing symlink target: $TARGET" >&2; exit 5; }
@@ -104,10 +125,11 @@ if [ ! -e "$DESTDIR/etc/shadowmist/config.toml" ]; then
     sed "s/^profile = \"balanced\"/profile = \"$PROFILE\"/" config/shadowmist.example.toml > "$BACKUP/config.new"
     install -m 0644 "$BACKUP/config.new" "$DESTDIR/etc/shadowmist/config.toml"
 fi
-install -D -m 0644 README.md "$DESTDIR/usr/local/share/doc/shadowmist/README.md"
+printf '%s\n' '# Shadow Mist legacy client' '' 'See the [client guide](docs/legacy/README.md) for setup, compatibility and recovery.' > "$BACKUP/README.new"
+install -D -m 0644 "$BACKUP/README.new" "$DESTDIR/usr/local/share/doc/shadowmist/README.md"
 install -D -m 0644 LICENSE "$DESTDIR/usr/local/share/doc/shadowmist/LICENSE"
 install -D -m 0644 assets/shadow-mist-rounded-icon.png "$DESTDIR/usr/local/share/doc/shadowmist/assets/shadow-mist-rounded-icon.png"
-for DOC in docs/*.md docs/project-tree.txt; do install -D -m 0644 "$DOC" "$DESTDIR/usr/local/share/doc/shadowmist/$DOC"; done
+for DOC in $(owned_documents); do install -D -m 0644 "$DOC" "$DESTDIR/usr/local/share/doc/shadowmist/$DOC"; done
 install -D -m 0755 scripts/uninstall.sh "$DESTDIR/usr/local/libexec/shadowmist/uninstall.sh"
 {
     for RELATIVE in $(owned_files); do
@@ -115,6 +137,10 @@ install -D -m 0755 scripts/uninstall.sh "$DESTDIR/usr/local/libexec/shadowmist/u
         printf '%s\t%s\n' "$HASH" "$RELATIVE"
     done
 } > "$BACKUP/manifest.new"
+if [ -f "$BACKUP/install-manifest.tsv" ]; then
+    awk -F '\t' 'NR == FNR { seen[$2] = 1; next } !seen[$2] { print }' "$BACKUP/manifest.new" "$BACKUP/install-manifest.tsv" > "$BACKUP/manifest.retained"
+    cat "$BACKUP/manifest.retained" >> "$BACKUP/manifest.new"
+fi
 install -m 0600 "$BACKUP/manifest.new" "$MANIFEST"
 if [ -z "$DESTDIR" ]; then systemctl daemon-reload; fi
 echo 'Installed. No network configuration was applied.'

@@ -14,7 +14,13 @@ jobs:
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: cargo test --locked --workspace
       - run: cargo build --locked --release --workspace
-      - run: sh -n scripts/install.sh scripts/uninstall.sh
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck wireguard-tools nftables unbound age
+      - run: shellcheck scripts/*.sh
+      - run: cargo build --locked -p shadowborn-core --example render_lab
+      - run: python3 tests/integration/shadowborn.py
+      - run: python3 tests/integration/provisioning.py
+      - run: python3 tests/integration/generated.py
+      - run: python3 tests/namespaces/shadowborn.py
       - run: python3 tests/integration/smoke.py --skip-daemon
   aarch64-check:
     runs-on: ubuntu-latest

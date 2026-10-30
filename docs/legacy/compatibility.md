@@ -33,7 +33,7 @@ physical links exclude DNS takeover. LAN names/search domains are deliberately
 left alone by default. Explicit `apply --replace-search-domain DOMAIN` consent
 can give up exact ordinary search domains on eligible links while preserving
 their prior values in the journal. Route-only domains and other compatibility
-restrictions remain unsupported. See `docs/recovery.md` for the scoped workflow.
+restrictions remain unsupported. See [recovery.md](recovery.md) for the scoped workflow.
 
 Wi-Fi scan randomization, LLMNR/mDNS/NetBIOS and DHCP/DUID changes are audit-only.
 No hostname changes, sysctl presets, generic firewall replacement or automatic

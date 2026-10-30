@@ -1,0 +1,21 @@
+[package]
+name = "shadowborn-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+
+[[bin]]
+name = "shadowborn"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+libc.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+shadowborn-core = { path = "../shadowborn-core" }
+shadowborn-platform = { path = "../shadowborn-platform" }
+

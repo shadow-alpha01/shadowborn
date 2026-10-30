@@ -1,8 +1,21 @@
-SHADOW_MIST_CODEX_SPEC.md
-AGENTS.md
 /target/
 *.swp
 .DS_Store
 /test-results/
 __pycache__/
 *.pyc
+
+# Operator secrets and generated provisioning artifacts
+/bundles/
+/backups/
+/secrets/
+/config/server.toml
+/wg-*.conf
+/client-*.conf
+*.age
+*.agekey
+*.psk
+*.pcap
+*.pcapng
+**/privatekey
+**/presharedkey

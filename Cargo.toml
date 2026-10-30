@@ -1,12 +1,13 @@
 [workspace]
-members = ["crates/shadowmist-core", "crates/shadowmist-platform-linux", "crates/shadowmist-daemon", "crates/shadowmist-cli"]
+members = ["crates/shadowmist-core", "crates/shadowmist-platform-linux", "crates/shadowmist-daemon", "crates/shadowmist-cli", "crates/shadowborn-core", "crates/shadowborn-platform", "crates/shadowborn-cli"]
+default-members = ["crates/shadowborn-core", "crates/shadowborn-platform", "crates/shadowborn-cli"]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
-license = "MIT"
+license-file = "LICENSE"
 
 [workspace.dependencies]
 anyhow = "1.0"

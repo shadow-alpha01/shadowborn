@@ -160,6 +160,18 @@ def main():
         run(install, timeout=180)
         installed_icon = stage / "usr/local/share/doc/shadowmist/assets/shadow-mist-rounded-icon.png"
         assert digest(installed_icon) == digest(ROOT / "assets/shadow-mist-rounded-icon.png")
+        docroot = stage / "usr/local/share/doc/shadowmist"
+        assert "Shadow Mist legacy client" in (docroot / "README.md").read_text()
+        assert (docroot / "docs/legacy/recovery.md").is_file()
+        assert not (docroot / "docs/installation-server.md").exists()
+        assert not (stage / "usr/local/bin/shadowborn").exists()
+        # A file from an older package stays owned across update, so later
+        # uninstall can remove it instead of leaving an orphan behind.
+        historical = docroot / "docs/project-tree.txt"
+        historical.write_text("synthetic prior package document\n")
+        manifest = stage / "var/lib/shadowmist/install-manifest.tsv"
+        with manifest.open("a") as stream:
+            stream.write(digest(historical) + "\tusr/local/share/doc/shadowmist/docs/project-tree.txt\n")
         installed_config = digest(stage / "etc/shadowmist/config.toml")
         run(install, codes=(5,))
         run(install + ["--update"])
@@ -192,6 +204,7 @@ def main():
         run(uninstaller)
         assert not target.exists()
         assert not installed_icon.exists()
+        assert not historical.exists()
         assert digest(stage / "etc/shadowmist/config.toml") == installed_config
         check("uninstall/update preserve modified files; clean uninstall retains config/backups")
 

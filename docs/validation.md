@@ -1,94 +1,50 @@
-# Validation record
+# Shadowborn validation — 2026-10-30
 
-Environment: Kali GNU/Linux 2026.3, x86_64, systemd PID 1, Rust/Cargo 1.97.1,
-NetworkManager 1.58.1. Running as an ordinary user. The initial foundation run
-had resolved inactive/unavailable and NM DNS plugin `default`. A later read-only
-incident investigation found resolved 262 active, the NM resolved plugin selected,
-and resolver D-Bus registration broken after package installation. No host network
-mutation is performed by these checks.
+Baseline: clean tracked checkout e06bf37; four legacy crates, no server code.
+Environment: Kali x86_64, Rust/Cargo 1.97.1; ordinary user. No developer-host
+network, installed client, resolver, route, firewall or service changes.
+The legacy regression suite remains part of workspace validation; its results
+do not certify the new server. Obsolete draft reports have been removed.
 
-## Automated results
+All claims refer only to their stated scope; actual supported server OS versions remain NOT TESTED.
 
-The standard toolchain lacks installed rustfmt/Clippy; matching Kali packages were downloaded
-and extracted under `/tmp/shadowmist-rust-tools`, without system installation.
-Their bin directory is used on PATH for validation.
+| Check | Result / scope |
+| --- | --- |
+| Formatting, Clippy, workspace tests, release build | PASS; 66 tests (54 legacy + 12 new) |
+| Pure configuration/authorization/storage tests | PASS; permissions, conflicts, tombstones, policy and no-history schema |
+| Staged server/legacy installation lifecycle | PASS; server packaging cases and 10 legacy smoke checks |
+| Root CLI in disposable chroot/user/network namespace | PASS; init/enroll, encrypted issue/backup, restore with revocation, deployed-host refusal |
+| Generated Unbound / systemd syntax | PASS; Unbound 1.26.1, systemd verify; paths relocated for validation |
+| Kernel WG + generated nft NAT in isolated namespaces | PASS: synthetic IPv4 ping/return, owned-table reload |
+| Host/metadata/spoofed-source denial | PASS: tested synthetic namespace cases only |
+| Explicit kernel peer removal | PASS: traffic stops; does not implement CLI live revoke |
+| Real HTTPS, Internet egress IP, public DNS ACL | NOT TESTED |
+| Actual authenticated DoT / certificate failure / no-log runtime | NOT TESTED / UNKNOWN |
+| Strict client, boot, sleep, multiple NICs, alternate routes, IPv6 bypass | NOT IMPLEMENTED / NOT TESTED |
+| VM restart/recovery, SSH lockout, live durable revoke | NOT IMPLEMENTED / NOT TESTED |
+| Peer-to-peer and Docker/corporate VPN integration | NOT TESTED |
+| aarch64 runtime, Debian/Ubuntu VM acceptance | NOT TESTED |
+| Dependency CVE audit, signed release, complete SBOM | NOT TESTED |
+| Performance | NOT TESTED |
 
-- [x] `cargo fmt --all -- --check` — PASS
-- [x] `cargo clippy --locked --workspace --all-targets -- -D warnings` — PASS, zero warnings
-- [x] `cargo test --locked --workspace` — PASS, 54 unit tests (32 core, 21 Linux, 1 daemon)
-- [x] `cargo build --locked --release --workspace` — PASS, both binaries
-- [x] `python3 tests/integration/smoke.py` — PASS, 12 integration checks
-- [x] Shell syntax and systemd unit validation using built executable paths — PASS.
+Activity-history schema/configuration tests are not a substitute for real
+service observations after ordinary traffic, failure, revoke, restart and reboot.
+Kernel tests use invented addresses and ephemeral keys, with no customer data,
+Internet traffic or persistent packet capture. Namespace exit removes test links.
 
-The simulated adapter tests exercise transaction failure, health failure,
-conflict handling, crash recovery, stale plans and permission boundaries. They
-do not establish actual TLS certificate validation, port-853 reachability,
-hardware MAC behavior or boot-time ordering on a supported live stack.
+Commands: scripts/validate.sh; cargo build --locked -p shadowborn-core --example
+render_lab; python3 tests/namespaces/shadowborn.py; python3
+tests/integration/provisioning.py; python3 tests/integration/generated.py.
+Missing optional dependencies are explicitly SKIPPED. No script existence alone
+counts as PASS. Tests/vm/README.md lists the outstanding acceptance matrix.
 
-## Required isolated VM release checklist — NOT TESTED
+Phase 0 is implemented. Phase 1 provisioning and manual lab generation exist;
+automatic activation, network rollback/recovery and live peer lifecycle remain
+unfinished. Phase 2 strict activation is rejected. Phase 3 full VM validation and
+Phase 4 production hardening/performance are not complete. This is a reviewable
+intermediate implementation, not a release candidate.
 
-- [ ] Fresh Kali connectivity before install and after balanced apply.
-- [ ] Root service start/enable/restart and sandbox permissions with NM/resolved.
-- [ ] Actual Quad9 authenticated DoT; packet capture evidence if authorized.
-- [ ] Offline resolver, blocked TCP 853 and invalid certificate rollback.
-- [ ] DHCP DNS injection, IPv6-only DNS, dual stack and resolver priority.
-- [ ] Captive portal exclusion and working local network resources.
-- [ ] Supported Wi-Fi future-activation random MAC; stable-SSID; actual driver limits.
-- [ ] Explicit active rotation success, checkpoint failure and remote-session guard.
-- [ ] Ethernet 802.1X, registered MAC and reservations remain safe/excluded.
-- [ ] VPN, Docker, corporate split DNS and existing firewall are preserved.
-- [ ] SIGKILL/reboot during apply and during restore; boot recovery timing.
-- [ ] Restore/uninstall diff preserves all unrelated settings.
-- [ ] aarch64 build/run, Fedora and Arch integration.
-
-Strict nftables namespace tests are **NOT IMPLEMENTED / phase 2**, and strict
-mode is rejected. Scan driver validation and timed portal exceptions are planned.
-
-The full phase 1 production/VM exit gate is **NOT MET** until this checklist is
-executed. Development implementation and safe local verification are separate
-from operational certification.
-
-## Real read-only observations
-
-`shadowmist doctor/audit/status --json` inspected the actual host. Status was
-`UNPROTECTED`, with eight interfaces and nine findings: NM was active, resolved
-was not active, resolver ownership was other/unknown. Reports were redacted.
-No DNS health domains were enrolled and no upstream health probes were issued.
-The smoke suite compared resolver contents and NM profile UUID/type inventory
-before/after dry runs and offline parser probes, tested a real unprivileged
-daemon/socket/SIGTERM lifecycle, and staged install/update/uninstall with
-ownership-conflict injection. Host networking, services and firewall were not
-modified. No failed automated checks remain in the final validation run.
-
-## DNS incident regression validation
-
-The user restored connectivity by adding a public nameserver to the generated
-resolved stub. Read-only inspection found a running resolved process with no
-owner for `org.freedesktop.resolve1`, empty resolved upstream state despite NM
-knowing DHCP DNS, and an installation-time D-Bus log reporting unknown user
-`systemd-resolve`, followed by activation timeouts. The new doctor identifies
-`RESOLVED_DBUS_UNAVAILABLE`, `RESOLVED_NO_UPSTREAM` and `RESOLV_CONF_BYPASS`
-on this real host without upstream DNS probes or service activation.
-
-Regression tests cover stub-content validation (including IPv6 and order),
-missing bus ownership, planner refusal, precise findings, and sanitized daemon
-assessment logs containing state/finding codes. Host repair commands are documented
-in `recovery.md`; they were not executed. Installed binaries and system services
-were left untouched; updated binaries are available under `target/release`.
-
-## Explicit ordinary search-domain replacement
-
-`apply --replace-search-domain home` is a one-time exact consent for dropping
-the local suffix on an active enrolled eligible physical connection. New tests
-cover default preservation, exact/case-insensitive consent, complete domain
-coverage, routing/VPN/other/enterprise exclusions, missing snapshot evidence,
-literal input validation, and restoring the prior `home` value with the entire
-transaction. No new blanket policy is saved in configuration.
-
-Read-only planning against the actual configured host was compared with and
-without consent. The default plan skipped DNS; the consented plan proposed live
-DNS changes including recorded `home` -> `~.` with no reconnect. The host's
-resolver contents, link, per-link DNS/domain/transport and NM profile inventory
-were preserved during verification. Live replacement was not executed: root
-authorization still requires the user's sudo password. The prepared installed
-CLI workflow must be run by the user; no VERIFIED live-DNS claim is made.
+Extra tools were downloaded from configured distro repositories and extracted
+under a temporary directory, never system-installed: Unbound 1.26.1, age 1.3.2,
+ShellCheck 0.11.0. ShellCheck passed for all shell scripts. No runtime DoT or
+complete service sandbox claim follows from these syntax checks.

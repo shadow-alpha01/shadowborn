@@ -1,8 +1,13 @@
-# Namespace tests
+# Isolated network validation
 
-Strict DNS nftables enforcement is phase 2 and is rejected by the MVP. There
-are no nftables mutation tests or host-firewall changes to execute. Before
-implementing strict mode, add an explicitly isolated network namespace harness
-covering IPv4/IPv6, loopback stubs, owned-table-only removal, timed watchdog
-rollback and preservation of unrelated rules. Namespace isolation alone cannot
-prove Wi-Fi-driver, NetworkManager or systemd integration.
+Build `cargo build --locked -p shadowborn-core --example render_lab`, then run
+`python3 tests/namespaces/shadowborn.py` as an ordinary user. It uses disposable
+user/network namespaces, synthetic addresses and ephemeral keys. It never runs
+privileged commands in the developer host's network namespace.
+
+Executed coverage: actual kernel WireGuard handshake, generated nft syntax and
+owned-table replacement, scoped IPv4 NAT/return traffic, host/metadata/spoofed
+source denial, and traffic loss after explicit kernel peer removal. This is not
+a test of automatic CLI live revoke, real Internet, DNS/DoT, strict client,
+boot/recovery or actual VM portability. Missing kernel capabilities/tools are
+SKIPPED or explicit failures, never converted into VERIFIED protection.
