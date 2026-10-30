@@ -18,8 +18,13 @@ FILES = {
     'usr/local/share/doc/shadowborn/LICENSE': ('LICENSE', 0o644),
     'usr/local/share/doc/shadowborn/server.example.toml': ('config/server.example.toml', 0o644),
 }
-for name in ('installation-server', 'client-enrollment', 'admin-recovery', 'no-logs-policy', 'validation', 'licensing'):
-    FILES[f'usr/local/share/doc/shadowborn/{name}.md'] = (f'docs/{name}.md', 0o644)
+# Preserve the repository's relative documentation links in the installed copy.
+# Legacy guides are documentation only; no legacy binaries/services are installed.
+FILES['usr/local/share/doc/shadowborn/assets/shadow-mist-rounded-icon.png'] = (
+    'assets/shadow-mist-rounded-icon.png', 0o644)
+for source in sorted((ROOT / 'docs').rglob('*.md')):
+    relative = source.relative_to(ROOT).as_posix()
+    FILES[f'usr/local/share/doc/shadowborn/{relative}'] = (relative, 0o644)
 MANIFEST = 'var/lib/shadowborn-package/manifest.json'
 
 

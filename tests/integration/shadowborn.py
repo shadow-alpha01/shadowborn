@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Unprivileged CLI and file-package tests. No network mutations."""
 import json
-import importlib.util
+import runpy
+import re
 import os
 from pathlib import Path
 import subprocess
@@ -40,16 +41,14 @@ def main():
         print('PASS: dry runs create no state; unsupported/unprivileged mutations fail')
         # This guard runs before euid checks, namespace creation or any network
         # command. Calling the internal mode directly must never touch the host.
-        spec = importlib.util.spec_from_file_location('namespace_lab', ROOT / 'tests/namespaces/shadowborn.py')
-        lab = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(lab)
+        lab = runpy.run_path(str(ROOT / 'tests/namespaces/shadowborn.py'), run_name='namespace_guard_test')
         marker = os.environ.pop('SHADOWBORN_OUTER_NETNS', None)
         try:
             for value in (None, os.readlink('/proc/self/ns/net')):
                 if value is not None:
                     os.environ['SHADOWBORN_OUTER_NETNS'] = value
                 try:
-                    lab.isolated()
+                    lab['isolated']()
                 except RuntimeError as error:
                     assert 'outer network namespace marker' in str(error)
                 else:
@@ -68,6 +67,13 @@ def main():
         run(install)
         assert not (stage / 'etc').exists()
         assert not (stage / 'usr/local/bin/shadowmist').exists()
+        installed_docs = stage / 'usr/local/share/doc/shadowborn'
+        for document in installed_docs.rglob('*.md'):
+            for match in re.findall(r'\]\(([^)#\s]+)(?:#[^)]*)?\)|(?:href|src)="([^"#]+)"', document.read_text()):
+                destination = next(part for part in match if part)
+                if '://' in destination or destination.startswith(('mailto:', '#', '/')):
+                    continue
+                assert (document.parent / destination).exists(), (document.name, destination)
         run(install, ok=False)
         run(update)
         binary = stage / 'usr/local/bin/shadowborn'

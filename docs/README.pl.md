@@ -9,4 +9,4 @@ Instrukcje techniczne są po angielsku: [serwer](installation-server.md),
 [polityka bez historii aktywności](no-logs-policy.md), [testy](validation.md).
 Tryb strict, automatyczny rollback sieci i obsługa urządzeń na działającym serwerze
 pozostają niewdrożone. To nie jest gotowe wydanie produkcyjne ani gwarancja
-anonimowości. Dotychczasowy poradnik znajduje się w [poradniku starego klienta](legacy/README.md).
+anonimowości. Dotychczasowy klient ma osobny [poradnik Shadow Mist](legacy/README.md).

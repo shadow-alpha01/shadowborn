@@ -12,9 +12,10 @@ All claims refer only to their stated scope; actual supported server OS versions
 | --- | --- |
 | Formatting, Clippy, workspace tests, release build | PASS; 66 tests (54 legacy + 12 new) |
 | Pure configuration/authorization/storage tests | PASS; permissions, conflicts, tombstones, policy and no-history schema |
-| Staged server/legacy installation lifecycle | PASS; server packaging cases and 10 legacy smoke checks |
+| Staged server/legacy installation lifecycle | PASS; server documentation links, legacy-only package, retained prior manifest ownership and 10 legacy smoke checks |
 | Root CLI in disposable chroot/user/network namespace | PASS; init/enroll, encrypted issue/backup, restore with revocation, deployed-host refusal |
 | Generated Unbound / systemd syntax | PASS; Unbound 1.26.1, systemd verify; paths relocated for validation |
+| Namespace test entry guard | PASS; absent/current outer-namespace marker rejected before any network command |
 | Kernel WG + generated nft NAT in isolated namespaces | PASS: synthetic IPv4 ping/return, owned-table reload |
 | Host/metadata/spoofed-source denial | PASS: tested synthetic namespace cases only |
 | Explicit kernel peer removal | PASS: traffic stops; does not implement CLI live revoke |
@@ -26,6 +27,7 @@ All claims refer only to their stated scope; actual supported server OS versions
 | aarch64 runtime, Debian/Ubuntu VM acceptance | NOT TESTED |
 | Dependency CVE audit, signed release, complete SBOM | NOT TESTED |
 | Performance | NOT TESTED |
+| Pre-commit repository checks | PASS; relative documentation links, diff whitespace, default server-only Cargo members, no common private-key/token patterns in 78 text files |
 
 Activity-history schema/configuration tests are not a substitute for real
 service observations after ordinary traffic, failure, revoke, restart and reboot.

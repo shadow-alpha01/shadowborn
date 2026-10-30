@@ -25,13 +25,13 @@ pub fn report(config: &Config, host: &Host, state_dir: &Path, probe: bool) -> Re
             "RESOLVED_UNAVAILABLE",
             Severity::Warn,
             "systemd-resolved unavailable/inactive; encrypted DNS is not enabled".into(),
-            "Review docs/compatibility.md; setup is a separate administrator action",
+            "Review docs/legacy/compatibility.md; setup is a separate administrator action",
         );
     }
     if host.capabilities.resolved_active && !host.capabilities.resolved_dbus_available {
         add("RESOLVED_DBUS_UNAVAILABLE", Severity::High,
             "systemd-resolved is active but org.freedesktop.resolve1 has no reachable D-Bus owner; NetworkManager cannot publish DNS settings".into(),
-            "Inspect journalctl -u dbus -u systemd-resolved for registration/user errors; see docs/recovery.md before restarting DNS services");
+            "Inspect journalctl -u dbus -u systemd-resolved for registration/user errors; see docs/legacy/recovery.md before restarting DNS services");
     }
     if host.capabilities.resolved_upstream_configured == Some(false) {
         add("RESOLVED_NO_UPSTREAM", Severity::Warn,
